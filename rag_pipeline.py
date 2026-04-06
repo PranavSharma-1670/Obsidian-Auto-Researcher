@@ -53,9 +53,11 @@ CONTEXT:
         },
         {
             'role': 'user',
-            'content': query
+            'content': f"Based STRICTLY on the context provided above, answer this: {query}"
         }
-    ])
+    ], options={
+        'temperature': 0.0
+    })
 
     return response['message']['content']
 
