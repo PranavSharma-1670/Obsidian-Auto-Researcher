@@ -9,15 +9,36 @@ if "ai_response" not in st.session_state:
 
 def main():
     st.title("🕵️ Obsidian Auto-Researcher")
-    st.markdown("### Version 1.0 - Local RAG Pipeline")
+    st.markdown("### Version 1.1 - Settings & HITL")
 
-    # Sidebar for configurations
+    # --- SIDEBAR & SETTINGS ---
     with st.sidebar:
-        st.header("Settings")
+        st.header("Model Selection")
         # Placeholder for local Ollama models
-        available_models = ["gemma4:e4b", "qwen3:8b", "tinyllama"]
+        available_models = ["gemma4:e4b", "qwen3:4b", "tinyllama"]
         selected_model = st.selectbox("Select Local Model", available_models)
         st.info(f"Currently selected: {selected_model}")
+
+        st.markdown("---")
+
+        st.header("Advanced Settings")
+        settings_mode = st.radio("Settings Mode", ["Default", "Custom"])
+
+        # Initialize default variables so they exist even if "Default" is selected
+        ui_temp = 0.0
+        ui_instructions = None
+
+        if settings_mode == "Custom":
+            ui_temp = st.slider(
+                "Temperature",
+                min_value=0.0, max_value=1.0, value=0.0, step=0.1,
+                help="0.0 is strict/factual. 1.0 is highly creative."
+            )
+            ui_instructions = st.text_area(
+                "System Instructions",
+                value="You are a Senior Research Assistant.\nUse ONLY the provided context to answer the user's question.\nIf the answer is not contained in the context, say \"I cannot answer this based on the provided documents.\"",
+                height=150
+            )
 
     # Main interface
     st.write("Welcome to the workspace. Ask a question based on your Raw Sources.")
@@ -28,17 +49,21 @@ def main():
         submitted = st.form_submit_button("Generate Research")
 
         if submitted and query:
-            with st.spinner(f"Querying ChromaDB and generating with {selected_model}..."):
+            with st.spinner(f"Querying ChromaDB and Generating with {selected_model} (Temp: {ui_temp})..."):
                 # Call our RAG function!
-                result = generate_research(query, model_name=selected_model)
+                result = generate_research(
+                    query,
+                    model_name=selected_model,
+                    temperature=ui_temp,
+                    custom_instructions=ui_instructions
+                )
                 # Save the result to Streamlit's memory so it survives button clicks!
                 st.session_state.ai_response = result
                 st.success("Research Generated!")
         elif submitted and not query:
             st.warning("Please enter a query.")
 
-    # --- PHASE 4: HUMAN IN THE LOOP EDITOR ---
-    # Only show this section IF there is a response in memory
+    # --- HITL EDITOR ---
     if st.session_state.ai_response:
         st.markdown("---")
         st.subheader("📝 Human-in-the-Loop Editor")
