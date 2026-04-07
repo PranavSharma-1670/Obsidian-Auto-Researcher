@@ -40,6 +40,7 @@ def main():
         # Initialize default variables so they exist even if "Default" is selected
         ui_temp = 0.0
         ui_instructions = None
+        ui_tags = "Auto-Researcher"
 
         if settings_mode == "Custom":
             ui_temp = st.slider(
@@ -51,6 +52,10 @@ def main():
                 "System Instructions",
                 value="You are a Senior Research Assistant.\nUse ONLY the provided context to answer the user's question.\nIf the answer is not contained in the context, say \"I cannot answer this based on the provided documents.\"",
                 height=150
+            )
+            ui_tags = st.text_input(
+                "Obsidian Tags (comma separated)",
+                value="Auto-Researcher, AI"
             )
 
     # Main interface
@@ -91,7 +96,7 @@ def main():
 
         # 3. Export action
         if st.button("💾 Save to Obsidian"):
-            success, message = save_to_obsidian(note_title, edited_content)
+            success, message = save_to_obsidian(note_title, edited_content, custom_tags=ui_tags)
 
             if success:
                 st.session_state.save_success = True

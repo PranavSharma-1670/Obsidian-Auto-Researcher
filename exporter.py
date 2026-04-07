@@ -11,7 +11,7 @@ def sanitize_filename(title):
     return clean_name.strip()
 
 
-def save_to_obsidian(title, content):
+def save_to_obsidian(title, content, custom_tags="Auto-Researcher"):
     """Writes the final text to a .md file in the Obsidian vault."""
 
     # 1. Safety check
@@ -29,8 +29,12 @@ def save_to_obsidian(title, content):
 
     # 3. Create Obsidian Frontmatter
     today = datetime.now().strftime('%Y-%m-%d')
-    frontmatter = f"---\ntags: [ai-research, auto-generated]\ndate: {today}\n---\n\n"
 
+    # Convert a comma-separated string "Auto-Researcher, AI" into a list format Obsidian likes
+    tag_list = [t.strip() for t in custom_tags.split(",") if t.strip()]
+    formatted_tags = "[" + ", ".join(tag_list) + "]"
+
+    frontmatter = f"---\ntags: {formatted_tags}\ndate: {today}\n---\n\n"
     final_content = frontmatter + content
 
     # 4. Write the physical file
