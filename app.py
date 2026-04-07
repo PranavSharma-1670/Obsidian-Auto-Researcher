@@ -192,12 +192,16 @@ def main():
         # ---------------------------------------------------------
         with ref_col:
             st.markdown("##### 📚 Alternate Drafts")
-            st.caption("Expand to copy/paste from other models.")
-            # Only show drafts that did NOT win
-            for model_name, draft_text in st.session_state.drafts.items():
-                if model_name != st.session_state.winning_model:
-                    with st.expander(f"Reference: {model_name}"):
-                        st.write(draft_text)
+            st.caption("Choose a tab to view alternate model outputs.")
+            reference_models = {k: v for k, v in st.session_state.drafts.items() if k != st.session_state.winning_model}
+
+            if reference_models:
+                tabs = st.tabs(list(reference_models.keys()))
+                for idx, (model_name, draft_text) in enumerate(reference_models.items()):
+                    with tabs[idx]:
+                        # The "slider rim" - locks the height to match your main editor
+                        with st.container(height=500):
+                            st.write(draft_text)
 
 if __name__ == "__main__":
     main()
