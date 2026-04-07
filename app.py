@@ -1,6 +1,7 @@
 import streamlit as st
 from rag_pipeline import generate_research
 from exporter import save_to_obsidian
+import ollama
 
 st.set_page_config(page_title="Obsidian Auto-Researcher", page_icon="🕵️",layout="wide")
 
@@ -15,41 +16,26 @@ if "drafts" not in st.session_state:
     st.session_state.drafts = {}
 if "active_query" not in st.session_state:
     st.session_state.active_query = ""
-
+if "winning_model" not in st.session_state:
+    st.session_state.winning_model = ""
 
 def main():
     st.title("🕵️ Obsidian Auto-Researcher")
     st.markdown("### Version 1.2 - Multi-Model Comparison Grid")
 
-    # --- CHECK FOR SUCCESSFUL SAVE ---
     if st.session_state.save_success:
         st.success(st.session_state.save_message)
         st.balloons()
-        # Reset so it doesn't show up again on the next click
         st.session_state.save_success = False
         st.session_state.save_message = ""
 
     # --- SIDEBAR & SETTINGS ---
-    # with st.sidebar:
-    #     st.header("Initial Model Selection")
-    #     # Placeholder for local Ollama models
-    #     available_models = ["gemma4:e4b", "qwen3:4b", "tinyllama"]
-    #     selected_models = st.multiselect(
-    #         "Select Models to Compare",
-    #         available_models,
-    #         default=["gemma4:e4b"]  # Default to at least one so the app doesn't complain
-    #     )
-
-    # --- SIDEBAR & SETTINGS ---
     with st.sidebar:
         st.header("Initial Model Selection")
-
         # Ask Ollama what is physically installed on your Mac right now!
-        import ollama
         try:
             local_models_info = ollama.list()
-            # Extract the names of the models
-            available_models = [m['model'] for m in local_models_info['models']]
+            available_models = [m['model'] for m in local_models_info['models']] # Extract the names of the models
         except Exception:
             available_models = ["Error: Could not connect to Ollama"]
 
@@ -86,8 +72,7 @@ def main():
             )
 
     # --- MAIN SEARCH INTERFACE ---
-    # Hide the search bar if we are currently editing a final draft in the HITL
-    if not st.session_state.ai_response:
+    if not st.session_state.ai_response and not st.session_state.drafts:
         st.write("Welcome to the workspace. Ask a question based on your Raw Sources.")
 
         with st.form("research_form"):
@@ -98,16 +83,13 @@ def main():
                 if not selected_models:
                     st.warning("Please select at least one model from the sidebar first.")
                 else:
-                    # Clear any old drafts just in case
                     st.session_state.drafts = {}
-
                     # FIX : Loop through all selected models sequentially to prevent Mac memory crash
                     for model in selected_models:
-                        with st.spinner(f"Generating draft with {model}... (This happens sequentially)"):
+                        with st.spinner(f"Generating draft with {model}..."):
                             result = generate_research(query, model_name=model, temperature=ui_temp,
                                                        custom_instructions=ui_instructions)
                             st.session_state.drafts[model] = result
-
                     st.session_state.active_query = query
                     st.rerun()
 
@@ -137,21 +119,32 @@ def main():
         st.markdown("<br>", unsafe_allow_html=True)
 
         # Draw dynamic columns based on how many drafts we have
-        draft_cols = st.columns(len(st.session_state.drafts))
+        draft_items = list(st.session_state.drafts.items())
 
-        for idx, (model_key, draft_text) in enumerate(st.session_state.drafts.items()):
-            with draft_cols[idx]:
+        for i in range(0, len(draft_items), 2):
+            cols = st.columns(2)  # Always create exactly 2 columns per row
+
+            # First item in the row
+            with cols[0]:
+                model_key, draft_text = draft_items[i]
                 st.markdown(f"### `{model_key}`")
-                # Show the text in a read-only scrollable container
                 st.text_area("Draft Output", value=draft_text, height=400, disabled=True, key=f"text_{model_key}")
-
-                # The crucial selection button
                 if st.button(f"✨ Send {model_key} to Editor", key=f"btn_{model_key}", use_container_width=True):
-                    # Push the winning draft to the final editor and clear the workspace
                     st.session_state.ai_response = draft_text
-                    st.session_state.drafts = {}
-                    st.session_state.active_query = ""
+                    st.session_state.winning_model = model_key  # Remember which one we picked
                     st.rerun()
+
+            # Second item in the row (if it exists)
+            if i + 1 < len(draft_items):
+                with cols[1]:
+                    model_key_2, draft_text_2 = draft_items[i + 1]
+                    st.markdown(f"### `{model_key_2}`")
+                    st.text_area("Draft Output", value=draft_text_2, height=400, disabled=True,
+                                 key=f"text_{model_key_2}")
+                    if st.button(f"✨ Send {model_key_2} to Editor", key=f"btn_{model_key_2}", use_container_width=True):
+                        st.session_state.ai_response = draft_text_2
+                        st.session_state.winning_model = model_key_2
+                        st.rerun()
 
         # Added a global discard button for the drafts view so you aren't stuck if you hate all outputs!
         st.markdown("---")
@@ -160,32 +153,51 @@ def main():
             st.session_state.active_query = ""
             st.rerun()
 
-    # --- HITL EDITOR ---
+    # --- HITL EDITOR WITH REFERENCE WINDOWS ---
     if st.session_state.ai_response:
         st.markdown("---")
         st.subheader("📝 Human-in-the-Loop Editor")
 
-        edited_content = st.text_area("Review and tweak the winning output before saving:",
-                                      value=st.session_state.ai_response,
-                                      height=400)
-        note_title = st.text_input("Obsidian Note Title:", value="AI Research Notes")
+        # Split the screen: 60% for your editor, 40% for reference materials
+        editor_col, ref_col = st.columns([6, 4])
 
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("💾 Save to Obsidian", use_container_width=True):
-                success, message = save_to_obsidian(note_title, edited_content, custom_tags=ui_tags)
-                if success:
-                    st.session_state.save_success = True
-                    st.session_state.save_message = f"File successfully created in your vault at:\n`{message}`"
+        with editor_col:
+            edited_content = st.text_area("Review and tweak the winning output before saving:",
+                                          value=st.session_state.ai_response,
+                                          height=500)
+            note_title = st.text_input("Obsidian Note Title:", value="AI Research Notes")
+
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("💾 Save to Obsidian", use_container_width=True):
+                    success, message = save_to_obsidian(note_title, edited_content, custom_tags=ui_tags)
+                    if success:
+                        st.session_state.save_success = True
+                        st.session_state.save_message = f"File successfully created in your vault at:\n`{message}`"
+                        st.session_state.ai_response = ""
+                        st.session_state.drafts = {}  # Wipe drafts ONLY on successful save
+                        st.session_state.active_query = ""
+                        st.rerun()
+                    else:
+                        st.error(f"Failed to save file: {message}")
+            with col2:
+                if st.button("🗑️ Discard Draft & Start Over", type="primary", use_container_width=True):
                     st.session_state.ai_response = ""
+                    st.session_state.drafts = {}
+                    st.session_state.active_query = ""
                     st.rerun()
-                else:
-                    st.error(f"Failed to save file: {message}")
-        with col2:
-            if st.button("🗑️ Discard & Start Over", type="primary", use_container_width=True):
-                st.session_state.ai_response = ""
-                st.rerun()
 
+        # ---------------------------------------------------------
+        # NEW FEATURE: Reference Expanders
+        # ---------------------------------------------------------
+        with ref_col:
+            st.markdown("##### 📚 Alternate Drafts")
+            st.caption("Expand to copy/paste from other models.")
+            # Only show drafts that did NOT win
+            for model_name, draft_text in st.session_state.drafts.items():
+                if model_name != st.session_state.winning_model:
+                    with st.expander(f"Reference: {model_name}"):
+                        st.write(draft_text)
 
 if __name__ == "__main__":
     main()
