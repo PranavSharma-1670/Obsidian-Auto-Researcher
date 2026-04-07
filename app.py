@@ -1,6 +1,6 @@
 import streamlit as st
 from rag_pipeline import generate_research
-from exporter import save_to_obsidian
+from exporter import save_to_obsidian, get_existing_notes
 import ollama
 
 st.set_page_config(page_title="Obsidian Auto-Researcher", page_icon="🕵️",layout="wide")
@@ -165,17 +165,44 @@ def main():
             edited_content = st.text_area("Review and tweak the winning output before saving:",
                                           value=st.session_state.ai_response,
                                           height=500)
-            note_title = st.text_input("Obsidian Note Title:", value="AI Research Notes")
+
+            # --- PHASE 6.2: DYNAMIC EXPORT OPTIONS ---
+            st.markdown("#### Export Options")
+            save_mode = st.radio("Save Mode:", ["Create New Note", "Append to Existing Note"], horizontal=True)
+
+            if save_mode == "Create New Note":
+                note_title = st.text_input("Obsidian Note Title:", value="AI Research Notes")
+                actual_mode = "create"
+            else:
+                # Fetch existing notes dynamically for the dropdown
+                existing_notes = get_existing_notes()
+                if existing_notes:
+                    note_title = st.selectbox("Select Existing Note to Append to:", existing_notes)
+                    actual_mode = "append"
+                else:
+                    st.warning("No existing notes found in vault. Defaulting to create new.")
+                    note_title = st.text_input("Obsidian Note Title:", value="AI Research Notes")
+                    actual_mode = "create"
+
+            st.markdown("<br>", unsafe_allow_html=True)
 
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("💾 Save to Obsidian", use_container_width=True):
-                    success, message = save_to_obsidian(note_title, edited_content, custom_tags=ui_tags)
+                # Update the button text depending on the mode to give clear user feedback
+                btn_text = "💾 Append to Obsidian" if actual_mode == "append" else "💾 Save to Obsidian"
+                if st.button(btn_text, use_container_width=True):
+
+                    # Pass our new actual_mode variable into the exporter
+                    success, message = save_to_obsidian(note_title, edited_content, custom_tags=ui_tags,
+                                                        mode=actual_mode)
+
                     if success:
                         st.session_state.save_success = True
-                        st.session_state.save_message = f"File successfully created in your vault at:\n`{message}`"
+                        action_word = "appended to" if actual_mode == "append" else "created in"
+                        st.session_state.save_message = f"File successfully {action_word} your vault at:\n`{message}`"
+
                         st.session_state.ai_response = ""
-                        st.session_state.drafts = {}  # Wipe drafts ONLY on successful save
+                        st.session_state.drafts = {}
                         st.session_state.active_query = ""
                         st.rerun()
                     else:
