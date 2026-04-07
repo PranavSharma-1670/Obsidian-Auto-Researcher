@@ -6,10 +6,23 @@ st.set_page_config(page_title="Obsidian Auto-Researcher", page_icon="🕵️", l
 
 if "ai_response" not in st.session_state:
     st.session_state.ai_response = ""
+if "save_success" not in st.session_state:
+    st.session_state.save_success = False
+if "save_message" not in st.session_state:
+    st.session_state.save_message = ""
 
 def main():
     st.title("🕵️ Obsidian Auto-Researcher")
     st.markdown("### Version 1.1 - Settings & HITL")
+
+    # --- CHECK FOR SUCCESSFUL SAVE ---
+    # If we just saved a file, show the message and balloons, then reset the memory
+    if st.session_state.save_success:
+        st.success(st.session_state.save_message)
+        st.balloons()
+        # Reset so it doesn't show up again on the next click
+        st.session_state.save_success = False
+        st.session_state.save_message = ""
 
     # --- SIDEBAR & SETTINGS ---
     with st.sidebar:
@@ -59,7 +72,7 @@ def main():
                 )
                 # Save the result to Streamlit's memory so it survives button clicks!
                 st.session_state.ai_response = result
-                st.success("Research Generated!")
+                st.rerun()
         elif submitted and not query:
             st.warning("Please enter a query.")
 
@@ -81,8 +94,10 @@ def main():
             success, message = save_to_obsidian(note_title, edited_content)
 
             if success:
-                st.success(f"File successfully created in your vault at:\n`{message}`")
-                st.balloons()  # A little celebration for finishing Version 1!
+                st.session_state.save_success = True
+                st.session_state.save_message = f"File successfully created in your vault at:\n`{message}`"
+                st.session_state.ai_response = ""
+                st.rerun()
             else:
                 st.error(f"Failed to save file: {message}")
 if __name__ == "__main__":
