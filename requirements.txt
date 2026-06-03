@@ -1,3 +1,5 @@
 streamlit>=1.56.0
 chromadb>=1.5.5
 ollama>=0.6.1
+trafilatura>=2.0.0
+duckduckgo_search>=8.1.1

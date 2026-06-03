@@ -16,7 +16,7 @@ def peek_database():
 
     # 4. 'Peek' grabs the first few entries so we can inspect them
     if count > 0:
-        results = collection.peek(limit=2)  # Change limit to see more chunks
+        results = collection.peek(limit=50)  # Change limit to see more chunks
 
         for i in range(len(results['ids'])):
             print(f"ID: {results['ids'][i]}")
